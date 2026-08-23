@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>レシート照合</title>
+<style>
+  @font-face {
+    font-family: 'receipt-mono';
+    src: local('Courier New');
+  }
+
+  :root {
+    --paper: #F5F1E8;
+    --paper-dark: #EBE4D4;
+    --ink: #26241F;
+    --ink-faint: #8A8271;
+    --line: #D8D0BC;
+    --stamp-green: #2F6F4E;
+    --stamp-red: #B5482C;
+    --yamate: #3E6259;
+    --shinkano: #8A4A2E;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #DCD5C3;
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(0,0,0,0.03), transparent 40%),
+      radial-gradient(circle at 80% 90%, rgba(0,0,0,0.03), transparent 40%);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    color: var(--ink);
+    display: flex;
+    justify-content: center;
+    padding: 24px 12px 60px;
+  }
+
+  .receipt {
+    width: 100%;
+    max-width: 400px;
+    background: var(--paper);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08), 0 12px 30px rgba(0,0,0,0.15);
+    position: relative;
+    padding: 28px 22px 24px;
+  }
+
+  .receipt::before, .receipt::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0;
+    height: 10px;
+    background:
+      radial-gradient(circle at 6px 5px, transparent 5px, var(--paper) 5.5px) repeat-x;
+    background-size: 16px 10px;
+  }
+  .receipt::before { top: -5px; }
+  .receipt::after { bottom: -5px; transform: rotate(180deg); }
+
+  .facility-toggle {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 20px;
+    background: var(--paper-dark);
+    padding: 4px;
+    border-radius: 8px;
+  }
+  .facility-toggle button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 10px 4px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 6px;
+    color: var(--ink-faint);
+    letter-spacing: 0.02em;
+    transition: all 0.2s ease;
+  }
+  .facility-toggle button.active { color: #fff; }
+  .facility-toggle button[data-fac="yamate"].active { background: var(--yamate); }
+  .facility-toggle button[data-fac="shinkano"].active { background: var(--shinkano); }
+  .facility-toggle button[data-mode].active { background: var(--ink); }
+
+  .brand {
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--ink-faint);
+    margin-bottom: 2px;
+  }
+  .title {
+    text-align: center;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    margin-bottom: 18px;
+  }
+
+  .dashed {
+    border-top: 1.5px dashed var(--line);
+    margin: 14px 0;
+  }
+
+  .total-input-row {
+    text-align: center;
+    margin-bottom: 4px;
+  }
+  .total-input-row label {
+    display: block;
+    font-size: 11px;
+    color: var(--ink-faint);
+    letter-spacing: 0.15em;
+    margin-bottom: 6px;
+  }
+  .total-input-wrap {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 4px;
+  }
+  .total-input-wrap span { font-size: 20px; color: var(--ink-faint); }
+  #receiptTotal {
+    font-family: "Courier New", monospace;
+    font-size: 34px;
+    font-weight: 700;
+    width: 160px;
+    text-align: center;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    border-bottom: 2px solid var(--line);
+    padding-bottom: 4px;
+  }
+  #receiptTotal:focus { outline: none; border-color: var(--ink); }
+  #receiptTotal::placeholder { color: #C9C1AD; }
+
+  .items {
+    margin-top: 18px;
+    min-height: 12px;
+  }
+  .item-row {
+    display: grid;
+    grid-template-columns: 44px 1fr 84px 22px;
+    gap: 6px;
+    align-items: center;
+    font-family: "Courier New", monospace;
+    font-size: 15px;
+    padding: 7px 0;
+    animation: itemIn 0.25s ease;
+  }
+  .fac-btn {
+    font-family: -apple-system, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1.5px solid var(--line);
+    background: transparent;
+    color: var(--ink-faint);
+    border-radius: 6px;
+    padding: 5px 2px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    letter-spacing: 0.02em;
+  }
+  .fac-btn.yamate { border-color: var(--yamate); color: var(--yamate); background: rgba(62,98,89,0.08); }
+  .fac-btn.shinkano { border-color: var(--shinkano); color: var(--shinkano); background: rgba(138,74,46,0.08); }
+  @keyframes itemIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .item-row input[type="text"] {
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--ink);
+    border-bottom: 1px solid var(--line);
+    padding: 4px 2px;
+  }
+  .item-row input[type="text"]:focus { outline: none; border-color: var(--ink); }
+  .item-row .yen-input {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+  }
+  .item-row .yen-input span { color: var(--ink-faint); font-size: 13px; margin-right: 2px; }
+  .item-row input[type="number"] {
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 14px;
+    width: 100%;
+    text-align: right;
+    color: var(--ink);
+    padding: 4px 2px;
+    -moz-appearance: textfield;
+  }
+  .item-row input[type="number"]::-webkit-outer-spin-button,
+  .item-row input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  .item-row input[type="number"]:focus { outline: none; }
+  .item-row .del {
+    border: none;
+    background: transparent;
+    color: var(--ink-faint);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px;
+  }
+  .item-row .del:hover { color: var(--stamp-red); }
+
+  .pending-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 6px;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .pending-item input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    accent-color: var(--yamate);
+  }
+  .pending-item .p-fac {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .pending-item .p-fac.yamate { background: rgba(62,98,89,0.12); color: var(--yamate); }
+  .pending-item .p-fac.shinkano { background: rgba(138,74,46,0.12); color: var(--shinkano); }
+  .pending-item .p-name { flex: 1; }
+  .pending-item .p-note { color: var(--ink-faint); font-size: 11px; }
+  .pending-item.used { opacity: 0.35; }
+  .pending-item.used input[type="checkbox"] { pointer-events: none; }
+
+  .card-review-item {
+    background: var(--paper-dark);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .card-review-item .cr-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+  }
+  .card-review-item .cr-name { font-size: 14px; font-weight: 600; }
+  .card-review-item .cr-amt { font-family: "Courier New", monospace; font-size: 15px; font-weight: 700; }
+  .card-review-item .cr-date { font-size: 11px; color: var(--ink-faint); margin-bottom: 8px; }
+  .card-review-item .cr-facs {
+    display: flex;
+    gap: 6px;
+  }
+  .card-review-item .cr-fac-btn {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 4px;
+    border-radius: 6px;
+    border: 1.5px solid var(--line);
+    background: transparent;
+    color: var(--ink-faint);
+    cursor: pointer;
+  }
+  .card-review-item .cr-fac-btn.yamate.picked { background: var(--yamate); border-color: var(--yamate); color: #fff; }
+  .card-review-item .cr-fac-btn.shinkano.picked { background: var(--shinkano); border-color: var(--shinkano); color: #fff; }
+  .card-review-item.done { opacity: 0.4; }
+  .cr-breakdown-btn {
+    width: 100%;
+    margin-top: 8px;
+    border: none;
+    background: transparent;
+    color: var(--ink-faint);
+    font-size: 11px;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 4px 0;
+  }
+
+  .add-item {
+    width: 100%;
+    margin-top: 10px;
+    padding: 11px;
+    border: 1.5px dashed var(--line);
+    background: transparent;
+    color: var(--ink-faint);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .add-item:hover { border-color: var(--ink); color: var(--ink); }
+
+  .tax-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: "Courier New", monospace;
+    font-size: 14px;
+    padding: 4px 0;
+  }
+  .tax-row .label { color: var(--ink-faint); letter-spacing: 0.1em; font-size: 12px; }
+  .tax-row .tax-yen {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+    width: 100px;
+  }
+  .tax-row .tax-yen span { color: var(--ink-faint); font-size: 13px; margin-right: 2px; }
+  .tax-row input[type="number"] {
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 14px;
+    width: 100%;
+    text-align: right;
+    color: var(--ink);
+    padding: 3px 2px;
+  }
+  .tax-row input[type="number"]:focus { outline: none; }
+
+  .subtotal-row {
+    display: flex;
+    justify-content: space-between;
+    font-family: "Courier New", monospace;
+    font-size: 15px;
+    padding-top: 16px;
+    margin-top: 4px;
+  }
+  .subtotal-row .label { color: var(--ink-faint); letter-spacing: 0.1em; font-size: 12px; align-self: center; }
+  .subtotal-row .amt { font-size: 22px; font-weight: 700; }
+
+  .diff-row {
+    text-align: center;
+    font-family: "Courier New", monospace;
+    font-size: 13px;
+    color: var(--ink-faint);
+    margin-top: 6px;
+    min-height: 18px;
+  }
+  .diff-row.over { color: var(--stamp-red); }
+  .diff-row.under { color: var(--stamp-red); }
+
+  .stamp-area {
+    position: relative;
+    height: 90px;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .stamp {
+    font-size: 30px;
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    color: var(--stamp-green);
+    border: 4px solid var(--stamp-green);
+    padding: 6px 18px;
+    border-radius: 8px;
+    transform: rotate(-8deg) scale(0);
+    opacity: 0;
+    mix-blend-mode: multiply;
+  }
+  .stamp.show {
+    animation: stampDown 0.4s cubic-bezier(.2,1.4,.4,1) forwards;
+  }
+  @keyframes stampDown {
+    0% { transform: rotate(-8deg) scale(2.2); opacity: 0; }
+    60% { transform: rotate(-8deg) scale(0.92); opacity: 1; }
+    100% { transform: rotate(-8deg) scale(1); opacity: 0.92; }
+  }
+
+  .save-btn {
+    width: 100%;
+    margin-top: 14px;
+    padding: 13px;
+    border: none;
+    border-radius: 8px;
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    opacity: 0.35;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .save-btn.enabled { opacity: 1; pointer-events: auto; }
+  .save-btn:active.enabled { transform: scale(0.98); }
+
+  .history-toggle {
+    display: block;
+    text-align: center;
+    width: 100%;
+    max-width: 400px;
+    margin: 16px auto 0;
+    background: transparent;
+    border: none;
+    color: #6b6355;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .history {
+    max-width: 400px;
+    margin: 8px auto 0;
+    display: none;
+  }
+  .history.show { display: block; }
+  .history-item {
+    background: var(--paper);
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .history-item .fac-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+  }
+  .history-item .fac-dot.yamate { background: var(--yamate); }
+  .history-item .fac-dot.shinkano { background: var(--shinkano); }
+  .history-item .amt-r { font-family: "Courier New", monospace; font-weight: 700; }
+  .empty-hist { text-align: center; color: #9a9282; font-size: 12px; padding: 10px; }
+</style>
+</head>
+<body>
+
+<div style="width:100%; max-width:400px; margin:0 auto;">
+  <div class="receipt">
+    <div class="brand">EONE SQUARE ・ 買い物記録</div>
+    <div class="title" id="pageTitle">🧾 買った物、記録して</div>
+
+    <div class="facility-toggle" id="modeToggle">
+      <button data-mode="receipt" class="active">🧾 レシート照合</button>
+      <button data-mode="card">💳 カード・Amazon</button>
+    </div>
+
+    <div id="breakdownBanner" style="display:none; align-items:center; justify-content:space-between; gap:8px; background:var(--yamate); color:#fff; border-radius:8px; padding:8px 12px; margin-bottom:14px; font-size:12px;">
+      <span id="breakdownBannerText"></span>
+      <button type="button" id="breakdownCancelBtn" style="background:none; border:1px solid rgba(255,255,255,0.6); color:#fff; border-radius:4px; padding:3px 8px; font-size:11px; cursor:pointer;">やめる</button>
+    </div>
+
+    <div class="total-input-row">
+      <label id="totalLabel">レシートの金額は？</label>
+      <div class="total-input-wrap">
+        <span>¥</span>
+        <input type="number" id="receiptTotal" placeholder="0" inputmode="numeric">
+      </div>
+    </div>
+
+    <div class="dashed"></div>
+
+    <div class="items" id="items"></div>
+
+    <button class="add-item" id="addItem" type="button">＋ 品目を追加する</button>
+
+    <div class="dashed"></div>
+
+    <div class="tax-row" id="taxRow">
+      <span class="label">消費税</span>
+      <div class="yen-input tax-yen"><span>¥</span><input type="number" id="taxInput" inputmode="numeric" placeholder="0"></div>
+    </div>
+
+    <div class="subtotal-row">
+      <span class="label">入力した合計</span>
+      <span class="amt" id="runningTotal">¥0</span>
+    </div>
+    <div class="diff-row" id="diffRow"></div>
+
+    <div class="stamp-area">
+      <div class="stamp" id="stamp">一致</div>
+    </div>
+
+    <button class="save-btn" id="saveBtn" type="button">この内容で保存する</button>
+
+    <div class="dashed" style="margin-top:20px;"></div>
+
+    <div id="pendingWrap" style="margin-top:6px;">
+      <div id="pendingStatus" style="font-size:12px; color:var(--ink-faint); text-align:center; padding:8px 0;">依頼リスト読み込み中…</div>
+      <div id="pendingList"></div>
+      <button class="save-btn" id="addSelectedBtn" type="button" style="background:var(--yamate); margin-top:12px;">選んだ物をまとめて追加 (0)</button>
+    </div>
+
+    <div id="cardReviewWrap" style="margin-top:18px; display:none;">
+      <div class="dashed"></div>
+      <div style="font-size:12px; color:var(--ink-faint); text-align:center; padding:8px 0;">⚠️ 要確認：自動検出したカード利用（拠点を選んでね）</div>
+      <div id="cardReviewList"></div>
+    </div>
+  </div>
+
+  <button class="history-toggle" id="historyToggle">過去の記録を見る ▾</button>
+  <div class="history" id="history">
+    <div class="empty-hist">まだ記録がないで</div>
+  </div>
+</div>
+
+<script>
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyFwKBKSU6GfZjIOu76ofI0wpune83iMEcPmnLqqU8HdLt4fwgiG1_4YiBgzEwTyeKu/exec";
+
+let itemCount = 0;
+let savedRecords = [];
+let pendingList = [];
+let cardPendingList = [];
+let mode = 'receipt';
+let breakdownSourceRowIndex = null;
+let breakdownSourceName = '';
+
+document.querySelectorAll('#modeToggle button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#modeToggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mode = btn.dataset.mode;
+
+    const pageTitle = document.getElementById('pageTitle');
+    const totalLabel = document.getElementById('totalLabel');
+    const addItemBtn = document.getElementById('addItem');
+    const pendingWrap = document.getElementById('pendingWrap');
+    const taxRow = document.getElementById('taxRow');
+
+    if (mode === 'card') {
+      pageTitle.textContent = '💳 使った物、記録して';
+      totalLabel.textContent = '利用/注文の合計は？';
+      addItemBtn.textContent = '＋ 品目を追加する';
+      pendingWrap.style.display = 'none';
+      taxRow.style.display = 'none'; // カード/Amazonの金額は基本税込表示のため非表示
+    } else {
+      pageTitle.textContent = '🧾 買った物、記録して';
+      totalLabel.textContent = 'レシートの金額は？';
+      addItemBtn.textContent = '＋ 品目を追加する';
+      pendingWrap.style.display = '';
+      taxRow.style.display = '';
+    }
+    renderCardReview();
+
+    // モードを跨ぐと混乱するので入力中身はリセット
+    receiptTotalEl.value = '';
+    document.getElementById('taxInput').value = '';
+    itemsEl.innerHTML = '';
+    recalc();
+  });
+});
+
+
+const itemsEl = document.getElementById('items');
+const receiptTotalEl = document.getElementById('receiptTotal');
+const runningTotalEl = document.getElementById('runningTotal');
+const diffRowEl = document.getElementById('diffRow');
+const stampEl = document.getElementById('stamp');
+const saveBtn = document.getElementById('saveBtn');
+const historyEl = document.getElementById('history');
+
+function fmtFac(f) { return f === '山手' ? 'yamate' : 'shinkano'; }
+function facLabel(f) { return f === 'yamate' ? '山手' : '新神野'; }
+
+async function loadPending() {
+  const statusEl = document.getElementById('pendingStatus');
+  statusEl.textContent = '依頼リスト読み込み中…';
+  try {
+    const res = await fetch(GAS_URL);
+    const data = await res.json();
+    pendingList = data.pending || [];
+    cardPendingList = data.cardPending || [];
+    statusEl.textContent = pendingList.length === 0
+      ? '未精算の依頼はなし。全部リストにない物？'
+      : `未精算の依頼 ${pendingList.length}件（タップで追加）`;
+    renderPending();
+    renderCardReview();
+  } catch (err) {
+    statusEl.textContent = '依頼リストの取得に失敗… GAS側のアクセス権限を確認して';
+    console.error(err);
+  }
+}
+
+function renderCardReview() {
+  const wrap = document.getElementById('cardReviewWrap');
+  const listEl = document.getElementById('cardReviewList');
+  if (mode !== 'card' || cardPendingList.length === 0) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = 'block';
+  listEl.innerHTML = cardPendingList.map(c => `
+    <div class="card-review-item" data-row="${c.rowIndex}">
+      <div class="cr-top">
+        <span class="cr-name">${c.name}</span>
+        <span class="cr-amt">¥${(c.amount || 0).toLocaleString()}</span>
+      </div>
+      <div class="cr-date">${fmtDate(c.datetime)}</div>
+      <div class="cr-facs">
+        <button type="button" class="cr-fac-btn yamate" data-row="${c.rowIndex}" data-fac="山手">山手</button>
+        <button type="button" class="cr-fac-btn shinkano" data-row="${c.rowIndex}" data-fac="新神野">新神野</button>
+      </div>
+      <button type="button" class="cr-breakdown-btn" data-row="${c.rowIndex}" data-amount="${c.amount}" data-name="${c.name.replace(/"/g,'&quot;')}">📝 内訳を入力する（何を買ったか品目ごとに分ける）</button>
+    </div>
+  `).join('');
+
+  listEl.querySelectorAll('.cr-breakdown-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      breakdownSourceRowIndex = parseInt(btn.dataset.row);
+      breakdownSourceName = btn.dataset.name;
+      receiptTotalEl.value = btn.dataset.amount;
+      itemsEl.innerHTML = '';
+      recalc();
+      document.getElementById('breakdownBanner').style.display = 'flex';
+      document.getElementById('breakdownBannerText').textContent = `「${breakdownSourceName}」¥${parseInt(btn.dataset.amount).toLocaleString()} の内訳を入力中`;
+      document.querySelector('.total-input-row').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  listEl.querySelectorAll('.cr-fac-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const rowIndex = parseInt(btn.dataset.row);
+      const facility = btn.dataset.fac;
+      const itemEl = btn.closest('.card-review-item');
+      itemEl.classList.add('done');
+      itemEl.querySelectorAll('.cr-fac-btn').forEach(b => b.disabled = true);
+      btn.classList.add('picked');
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'confirmCardFacility', items: [{ rowIndex, facility }] })
+        });
+        cardPendingList = cardPendingList.filter(c => c.rowIndex !== rowIndex);
+        setTimeout(renderCardReview, 400);
+      } catch (err) {
+        console.error(err);
+        alert('拠点の確定に失敗したかも。もう一回試してみて。');
+      }
+    });
+  });
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return '';
+  return dt.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) +
+         ' ' + dt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+}
+
+function renderPending() {
+  const listEl = document.getElementById('pendingList');
+  listEl.innerHTML = pendingList.map(p => {
+    const facClass = fmtFac(p.facility);
+    const facLabel = p.facility || '?';
+    const usedRow = document.querySelector(`.item-row[data-row-index="${p.rowIndex}"]`);
+    return `<div class="pending-item ${usedRow ? 'used' : ''}" data-pending-row="${p.rowIndex}">
+      <input type="checkbox" ${usedRow ? 'disabled' : ''} data-row="${p.rowIndex}">
+      <span class="p-fac ${facClass}">${facLabel}</span>
+      <span class="p-name">${p.name}${p.datetime ? `<br><span class="p-note">${fmtDate(p.datetime)}</span>` : ''}</span>
+    </div>`;
+  }).join('');
+
+  listEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', updateAddSelectedBtn);
+  });
+  updateAddSelectedBtn();
+}
+
+function updateAddSelectedBtn() {
+  const btn = document.getElementById('addSelectedBtn');
+  const checked = document.querySelectorAll('#pendingList input[type="checkbox"]:checked');
+  btn.textContent = `選んだ物をまとめて追加 (${checked.length})`;
+  if (checked.length > 0) {
+    btn.style.opacity = '1';
+    btn.style.pointerEvents = 'auto';
+  } else {
+    btn.style.opacity = '0.4';
+    btn.style.pointerEvents = 'none';
+  }
+}
+
+document.getElementById('addSelectedBtn').addEventListener('click', () => {
+  const checked = document.querySelectorAll('#pendingList input[type="checkbox"]:checked');
+  checked.forEach(cb => {
+    const rowIndex = parseInt(cb.dataset.row);
+    const p = pendingList.find(x => x.rowIndex === rowIndex);
+    if (!p) return;
+    addItemRow(p.name, '', fmtFac(p.facility), rowIndex, { category: p.category, note: p.note });
+  });
+  renderPending();
+  itemsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+function unmarkPendingUsed() { renderPending(); }
+
+
+function addItemRow(name = '', amount = '', fac = 'yamate', rowIndex = null, meta = {}) {
+  itemCount++;
+  const row = document.createElement('div');
+  row.className = 'item-row';
+  row.dataset.fac = fac;
+  if (rowIndex) row.dataset.rowIndex = rowIndex;
+  if (meta.category) row.dataset.category = meta.category;
+  if (meta.note) row.dataset.note = meta.note;
+
+  const facLocked = !!rowIndex; // 依頼リストから来た品は拠点固定（スプシの拠点に従う）
+  row.innerHTML = `
+    <button type="button" class="fac-btn ${fac}" ${facLocked ? 'disabled style="opacity:0.6;cursor:default;"' : ''}>${fac === 'yamate' ? '山手' : '新神野'}</button>
+    <input type="text" placeholder="品目 (例：卵)" value="${name}" ${rowIndex ? 'readonly style="color:var(--ink-faint);"' : ''}>
+    <div class="yen-input"><span>¥</span><input type="number" inputmode="numeric" placeholder="0" value="${amount}"></div>
+    <button class="del" type="button">×</button>
+  `;
+  const facBtn = row.querySelector('.fac-btn');
+  const nameInput = row.querySelector('input[type="text"]');
+  const amtInput = row.querySelector('input[type="number"]');
+  const delBtn = row.querySelector('.del');
+
+  if (!facLocked) {
+    facBtn.addEventListener('click', () => {
+      const next = row.dataset.fac === 'yamate' ? 'shinkano' : 'yamate';
+      row.dataset.fac = next;
+      facBtn.textContent = next === 'yamate' ? '山手' : '新神野';
+      facBtn.classList.remove('yamate', 'shinkano');
+      facBtn.classList.add(next);
+    });
+  }
+
+  amtInput.addEventListener('input', recalc);
+  delBtn.addEventListener('click', () => {
+    row.remove();
+    if (rowIndex) renderPending();
+    recalc();
+  });
+
+  itemsEl.appendChild(row);
+  recalc();
+  if (!rowIndex) nameInput.focus();
+  else amtInput.focus();
+}
+
+function recalc() {
+  let sum = 0;
+  document.querySelectorAll('.item-row input[type="number"]').forEach(inp => {
+    sum += parseFloat(inp.value) || 0;
+  });
+  const tax = parseFloat(document.getElementById('taxInput').value) || 0;
+  const sumWithTax = sum + tax;
+  runningTotalEl.textContent = '¥' + sumWithTax.toLocaleString();
+
+  const receiptVal = parseFloat(receiptTotalEl.value) || 0;
+  const diff = receiptVal - sumWithTax;
+
+  stampEl.classList.remove('show');
+  diffRowEl.classList.remove('over', 'under');
+  saveBtn.classList.remove('enabled');
+
+  if (receiptVal > 0 && sumWithTax > 0) {
+    if (diff === 0) {
+      diffRowEl.textContent = 'ピッタリ！スッキリ！';
+      void stampEl.offsetWidth;
+      stampEl.classList.add('show');
+      saveBtn.classList.add('enabled');
+    } else if (diff > 0) {
+      diffRowEl.textContent = `あと ¥${diff.toLocaleString()} 足りん`;
+      diffRowEl.classList.add('under');
+    } else {
+      diffRowEl.textContent = `¥${Math.abs(diff).toLocaleString()} オーバーしとる`;
+      diffRowEl.classList.add('over');
+    }
+  } else {
+    diffRowEl.textContent = '';
+  }
+}
+
+receiptTotalEl.addEventListener('input', recalc);
+document.getElementById('taxInput').addEventListener('input', recalc);
+document.getElementById('addItem').addEventListener('click', () => addItemRow());
+
+saveBtn.addEventListener('click', async () => {
+  if (!saveBtn.classList.contains('enabled')) return;
+  saveBtn.textContent = '送信中…';
+  saveBtn.classList.remove('enabled');
+
+  const paymentMethod = mode === 'card' ? 'カード' : '現金';
+  const items = [];
+  const facSubtotal = { yamate: 0, shinkano: 0 };
+  document.querySelectorAll('.item-row').forEach(row => {
+    const n = row.querySelector('input[type="text"]').value || '(名称なし)';
+    const a = parseFloat(row.querySelector('input[type="number"]').value) || 0;
+    const f = row.dataset.fac;
+    const rowIndex = row.dataset.rowIndex ? parseInt(row.dataset.rowIndex) : null;
+    facSubtotal[f] = (facSubtotal[f] || 0) + a;
+    if (rowIndex) {
+      items.push({ rowIndex, amount: a, facility: f, paymentMethod });
+    } else {
+      items.push({ name: n, amount: a, facility: facLabel(f), category: row.dataset.category || '未分類', note: row.dataset.note || '', paymentMethod });
+    }
+  });
+
+  // 消費税を品目金額の比率で山手/新神野に自動按分
+  const taxTotal = parseFloat(document.getElementById('taxInput').value) || 0;
+  if (taxTotal > 0) {
+    const itemSum = facSubtotal.yamate + facSubtotal.shinkano;
+    if (itemSum > 0) {
+      let yamateTax = Math.round(taxTotal * (facSubtotal.yamate / itemSum));
+      let shinkanoTax = taxTotal - yamateTax; // 端数はこちらに寄せて合計を必ず一致させる
+      if (facSubtotal.yamate > 0) {
+        items.push({ name: '消費税（按分）', amount: yamateTax, facility: '山手', category: '消費税', note: '自動按分', paymentMethod });
+      }
+      if (facSubtotal.shinkano > 0) {
+        items.push({ name: '消費税（按分）', amount: shinkanoTax, facility: '新神野', category: '消費税', note: '自動按分', paymentMethod });
+      }
+      // 片方しか無いのに両方書いてしまうのを防ぐ（按分不要なケース）
+      if (facSubtotal.yamate === 0 || facSubtotal.shinkano === 0) {
+        // 上のpushで片方は0円のまま入ってしまうので除去
+      }
+    } else {
+      // 品目が無いのに税だけある異常系は無視（起こらない想定）
+    }
+  }
+  // 按分先が無い(0円)の消費税行を除去
+  const cleanedItems = items.filter(it => !(it.category === '消費税' && it.amount === 0));
+
+  try {
+    if (breakdownSourceRowIndex) {
+      // カード利用の内訳入力モード：元の行を分解して書き込む
+      const breakdownItems = cleanedItems.map(it => ({
+        name: it.name,
+        amount: it.amount,
+        facility: it.facility,
+        category: it.category || '未分類'
+      }));
+      await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'confirmCardBreakdown', sourceRowIndex: breakdownSourceRowIndex, items: breakdownItems })
+      });
+    } else {
+      await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // プリフライト回避のためtext/plainで送る
+        body: JSON.stringify({ action: 'confirmReceipt', items: cleanedItems })
+      });
+    }
+  } catch (err) {
+    console.error(err);
+    alert('スプシへの保存に失敗したかも。通信状況を確認して、履歴には一旦残しとくで。');
+  }
+
+  savedRecords.unshift({
+    total: parseFloat(receiptTotalEl.value) || 0,
+    items: cleanedItems.map(it => ({ ...it, facility: it.facility || null })),
+    date: new Date()
+  });
+  renderHistory();
+
+  // reset for next receipt
+  receiptTotalEl.value = '';
+  document.getElementById('taxInput').value = '';
+  itemsEl.innerHTML = '';
+  recalc();
+  saveBtn.textContent = 'この内容で保存する';
+  breakdownSourceRowIndex = null;
+  breakdownSourceName = '';
+  document.getElementById('breakdownBanner').style.display = 'none';
+
+  historyEl.classList.add('show');
+  document.getElementById('historyToggle').textContent = '過去の記録を見る ▴';
+
+  await loadPending(); // 使った依頼・カード確認リストを反映して最新化
+});
+
+document.getElementById('breakdownCancelBtn').addEventListener('click', () => {
+  breakdownSourceRowIndex = null;
+  breakdownSourceName = '';
+  document.getElementById('breakdownBanner').style.display = 'none';
+  receiptTotalEl.value = '';
+  itemsEl.innerHTML = '';
+  recalc();
+});
+
+function renderHistory() {
+  if (savedRecords.length === 0) {
+    historyEl.innerHTML = '<div class="empty-hist">まだ記録がないで</div>';
+    return;
+  }
+  historyEl.innerHTML = savedRecords.map(r => {
+    const dateStr = r.date.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) +
+                    ' ' + r.date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    const isYamate = f => f === '山手' || f === 'yamate';
+    const isShinkano = f => f === '新神野' || f === 'shinkano';
+    const yTotal = r.items.filter(i => isYamate(i.facility)).length;
+    const sTotal = r.items.filter(i => isShinkano(i.facility)).length;
+    const parts = [];
+    if (yTotal) parts.push(`<span class="fac-dot yamate"></span>山手×${yTotal}`);
+    if (sTotal) parts.push(`<span class="fac-dot shinkano"></span>新神野×${sTotal}`);
+    return `<div class="history-item">
+      <span>${dateStr}<br><span style="font-size:11px;">${parts.join('　')}</span></span>
+      <span class="amt-r">¥${r.total.toLocaleString()}</span>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('historyToggle').addEventListener('click', () => {
+  historyEl.classList.toggle('show');
+  document.getElementById('historyToggle').textContent =
+    historyEl.classList.contains('show') ? '過去の記録を見る ▴' : '過去の記録を見る ▾';
+});
+
+loadPending();
+</script>
+</body>
+</html>
