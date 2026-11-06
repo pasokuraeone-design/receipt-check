@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "example": true,
+  "exampleNotice": "合成データです。実在の取引・レシートではありません。",
+  "source": "grok-bot-photo",
+  "photo": {
+    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "byteLength": 2048
+  },
+  "receipt": {
+    "purchaseDate": "2026-04-01",
+    "purchaseTime": "12:34",
+    "storeName": "サンプル商店",
+    "paymentMethod": null,
+    "taxMode": "exclusive",
+    "subtotalYen": 1000,
+    "discountYen": 100,
+    "taxYen": 90,
+    "totalYen": 990,
+    "items": [
+      {
+        "name": "サンプル卵",
+        "amountYen": 300,
+        "qty": 1,
+        "category": null,
+        "facility": null,
+        "taxRate": 8
+      },
+      {
+        "name": "サンプル洗剤",
+        "amountYen": 700,
+        "qty": 1,
+        "category": null,
+        "facility": null,
+        "taxRate": 10
+      }
+    ]
+  },
+  "unreadable": [
+    "receipt.paymentMethod",
+    "receipt.items.0.category",
+    "receipt.items.0.facility",
+    "receipt.items.1.category",
+    "receipt.items.1.facility"
+  ],
+  "notes": "支払方法・拠点・分類はレシートからは確定できないため null。このファイルは記入例なので保存できません。"
+}

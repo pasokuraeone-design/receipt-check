@@ -1,0 +1,10 @@
+{
+  "name": "receipt-check",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/receiptImport.test.mjs test/ui-photo-import.mjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.15.0"
+  }
+}
