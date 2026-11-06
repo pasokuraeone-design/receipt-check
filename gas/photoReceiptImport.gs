@@ -62,11 +62,15 @@ function photoReceiptCardBreakdown_(data) {
   }
   var sheet = photoReceiptSheet_();
   var row = photoReceiptReadCardRow_(sheet, data.sourceRowIndex, data.expectedId, plan.totalYen);
-  if (row.error) return photoReceiptError_(row.error);
+  if (row.error && !row.alreadySettled) return photoReceiptError_(row.error);
   var decision = photoReceiptDecide_(sheet, plan);
   if (decision.error) return photoReceiptError_(decision.error);
   if (decision.kind === 'conflict') {
     return photoReceiptError_('同じ写真IDの別内容が既にあります。カード行は変更しません。');
+  }
+  if (row.alreadySettled) {
+    var addedSettled = photoReceiptAppend_(sheet, plan, decision.lines || []);
+    return photoReceiptSuccess_('photoReceiptCardBreakdown', plan, addedSettled, decision.skipped || 0, decision.kind === 'duplicate');
   }
   var added = photoReceiptAppend_(sheet, plan, decision.lines || []);
   var current = photoReceiptReadCardRow_(sheet, data.sourceRowIndex, data.expectedId, plan.totalYen);

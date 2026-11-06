@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:,">
+<title>レシート写真の確認デモ（模擬台帳）</title>
+<style>
+  :root {
+    --paper: #f5f1e8;
+    --ink: #26241f;
+    --faint: #6f685c;
+    --line: #d8d0bc;
+    --red: #b5482c;
+    --green: #2f6f4e;
+    --yamate: #3e6259;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #dcd5c3;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    line-height: 1.5;
+  }
+  main { max-width: 440px; margin: 0 auto; padding: 16px 12px 48px; }
+  .banner {
+    background: #fff4ec;
+    border: 2px solid var(--red);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  h1 { font-size: 22px; margin: 16px 0 8px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  p { margin: 8px 0; }
+  button, select, input {
+    font: inherit;
+    color: inherit;
+  }
+  .stack { display: flex; flex-direction: column; gap: 8px; }
+  button {
+    min-height: 44px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: #fff;
+    padding: 8px 12px;
+  }
+  button.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  button:disabled { opacity: 0.45; }
+  label { display: block; margin: 10px 0; font-size: 13px; color: var(--faint); }
+  input, select {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    min-height: 44px;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: #fff;
+    font-size: 16px;
+  }
+  .card { background: var(--paper); border-radius: 12px; padding: 12px; margin-top: 12px; }
+  .issues { color: var(--red); padding-left: 18px; }
+  .info { color: var(--faint); }
+  .item {
+    border-top: 1px dashed var(--line);
+    padding-top: 8px;
+    margin-top: 8px;
+  }
+  .facs { display: flex; gap: 8px; }
+  .facs button[aria-pressed="true"] { background: var(--yamate); color: #fff; border-color: var(--yamate); }
+  #preview { max-width: 100%; max-height: 160px; display: block; margin: 8px auto; }
+  .status { font-weight: 700; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 4px; text-align: left; vertical-align: top; }
+  .mono { font-family: ui-monospace, "Courier New", monospace; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+  <p class="banner" id="banner">これはデモです。下の表は模擬台帳で、このブラウザのメモリにだけあります。Googleスプレッドシートには保存していません。本番の連携ができたことにはなりません。</p>
+  <h1>レシート写真の確認</h1>
+  <p>サンプルを押すと、合成の読み取り結果が開きます。ファイルは要りません。未確認の項目は空のままなので、選ぶまで保存できません。</p>
+  <div class="stack">
+    <button type="button" id="loadUnresolved">未確認のサンプルを読み込む</button>
+    <button type="button" id="loadCash">確認済みの現金サンプル</button>
+    <button type="button" id="loadInclusive">内税サンプル</button>
+    <button type="button" id="loadCard">カード払いサンプル</button>
+    <button type="button" id="resetDemo">模擬台帳を初期状態に戻す</button>
+  </div>
+
+  <section class="card" id="review" hidden>
+    <h2>読み取り結果</h2>
+    <p id="sampleNote"></p>
+    <img id="preview" alt="合成の照合用画像。この端末の中だけで表示します。" hidden>
+    <p class="mono" id="identity"></p>
+    <div id="form"></div>
+    <div id="cardBox" hidden>
+      <p>カード払いは、模擬の自動取込行を自分で選びます。日付や金額が近くても自動では選びません。</p>
+      <div id="cardList"></div>
+    </div>
+    <ul class="issues" id="issues"></ul>
+    <button type="button" class="primary" id="saveDemo" disabled>模擬台帳に保存する</button>
+  </section>
+
+  <section class="card">
+    <h2>模擬の再送と行ずれ</h2>
+    <p>ここでの保存先は模擬台帳だけです。同じ写真IDの再送、途中で欠けた1行、行番号がずれても別の行を0円にしないこと、をこの場で見られます。</p>
+    <div class="stack">
+      <button type="button" id="resendDemo">同じ写真をもう一度保存</button>
+      <button type="button" id="partialDemo">最後の1行だけ消して再送</button>
+      <button type="button" id="shiftDemo">行番号をずらした保存を試す</button>
+    </div>
+    <p class="status" id="status" role="status"></p>
+  </section>
+
+  <section class="card">
+    <h2>模擬台帳の読み戻し</h2>
+    <p>購入日の列は、サンプルに入れたレシートの日付です。この画面を開いた日時ではありません。</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>ID</th><th>日付</th><th>拠点</th><th>品目</th><th>金額</th><th>分類</th></tr>
+        </thead>
+        <tbody id="ledgerBody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script>
+/*__RECEIPT_IMPORT__*/
+</script>
+<script>
+/*__MOCK_LEDGER__*/
+</script>
+<script>
+(function () {
+  var PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  var ledger = MockLedger.createMockLedger();
+  var state = { document: null, review: null, verifiedSha256: '', verifiedByteLength: null, cardSelection: null, pendingPost: null, savedPost: null };
+
+  function bytesFrom(extra) {
+    var png = Uint8Array.from(atob(PNG), function (ch) { return ch.charCodeAt(0); });
+    if (!extra) return png;
+    var out = new Uint8Array(png.length + extra.length);
+    out.set(png, 0);
+    out.set(extra, png.length);
+    return out;
+  }
+
+  function baseReceipt(extra) {
+    var receipt = {
+      purchaseDate: '2026-04-01',
+      purchaseTime: '12:34',
+      storeName: 'サンプル商店',
+      paymentMethod: '現金',
+      taxMode: 'exclusive',
+      subtotalYen: 1000,
+      discountYen: 0,
+      taxYen: 80,
+      totalYen: 1080,
+      items: [
+        { name: 'サンプル卵', amountYen: 400, qty: 1, category: '食費', facility: '山手', taxRate: 8 },
+        { name: 'サンプル洗剤', amountYen: 600, qty: 1, category: '日用品費', facility: '新神野', taxRate: 8 }
+      ]
+    };
+    Object.keys(extra || {}).forEach(function (key) { receipt[key] = extra[key]; });
+    return {
+      schemaVersion: 1,
+      source: 'grok-bot-photo',
+      example: false,
+      photo: { sha256: '0'.repeat(64), byteLength: 1 },
+      receipt: receipt,
+      unreadable: [],
+      notes: '合成データです。実在の取引ではありません。'
+    };
+  }
+
+  var samples = {
+    unresolved: {
+      note: '支払方法・拠点・分類は空です。推測では埋めていません。',
+      bytes: bytesFrom(null),
+      doc: baseReceipt({
+        paymentMethod: null,
+        items: [
+          { name: 'サンプル卵', amountYen: 400, qty: 1, category: null, facility: null, taxRate: 8 },
+          { name: 'サンプル洗剤', amountYen: 600, qty: 1, category: null, facility: null, taxRate: 8 }
+        ]
+      })
+    },
+    cash: { note: '未確認サンプルと同じ合成写真です。中身を確認済みにしたものです。', bytes: bytesFrom(null), doc: baseReceipt() },
+    inclusive: {
+      note: '内税です。消費税は合計に足しません。',
+      bytes: bytesFrom([9, 9, 9]),
+      doc: baseReceipt({
+        taxMode: 'inclusive',
+        taxYen: 74,
+        totalYen: 1000
+      })
+    },
+    card: {
+      note: '1080円・4月1日の自動取込があります。それだけでは選ばれません。',
+      bytes: bytesFrom([7, 7, 7]),
+      doc: baseReceipt({ paymentMethod: 'カード' })
+    }
+  };
+  samples.unresolved.doc.unreadable = [
+    'receipt.paymentMethod',
+    'receipt.items.0.facility',
+    'receipt.items.0.category',
+    'receipt.items.1.facility',
+    'receipt.items.1.category'
+  ];
+
+  function el(tag, text) {
+    var node = document.createElement(tag);
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function setStatus(text) {
+    document.getElementById('status').textContent = text;
+  }
+
+  function renderLedger() {
+    var body = document.getElementById('ledgerBody');
+    body.replaceChildren();
+    ledger.snapshot().forEach(function (row) {
+      var tr = el('tr');
+      tr.dataset.id = row.id;
+      tr.dataset.amount = String(row.amount);
+      tr.dataset.facility = row.facility;
+      tr.dataset.date = row.purchaseDate;
+      [row.id, row.purchaseDate, row.facility || '（空）', row.name, String(row.amount), row.category].forEach(function (value) {
+        tr.appendChild(el('td', value));
+      });
+      body.appendChild(tr);
+    });
+  }
+
+  function currentEvaluation() {
+    if (!state.document || !state.review) return null;
+    state.review.cardSelection = state.cardSelection;
+    state.review.addedTaxYen = state.review.taxMode === 'inclusive' ? 0 : state.review.taxYen;
+    return ReceiptImport.evaluateReviewed(state.document, state.review, {
+      verifiedPhotoSha256: state.verifiedSha256,
+      verifiedPhotoByteLength: state.verifiedByteLength,
+      capabilitiesBody: ledger.read(),
+      cardPending: ledger.read().cardPending
+    });
+  }
+
+  function renderCardList(evaluation) {
+    var box = document.getElementById('cardBox');
+    var list = document.getElementById('cardList');
+    if (!state.review || state.review.paymentMethod !== 'カード') {
+      box.hidden = true;
+      list.replaceChildren();
+      return;
+    }
+    box.hidden = false;
+    list.replaceChildren();
+    var candidates = evaluation && evaluation.card ? evaluation.card.candidates : [];
+    if (!candidates.length) {
+      list.appendChild(el('p', '模擬の自動取込行がありません。新しいカード支出は追加しません。'));
+      return;
+    }
+    candidates.forEach(function (candidate) {
+      var btn = el('button');
+      btn.type = 'button';
+      var picked = state.cardSelection && state.cardSelection.id === candidate.id && state.cardSelection.rowIndex === candidate.rowIndex;
+      var hint = candidate.similarAmount || candidate.similarDate ? ' 日付や金額が近いです。同じレシートとは判断しません。' : '';
+      var blocked = candidate.selectable ? '' : ' IDが自動取込ではないので選べません。';
+      btn.textContent = candidate.name + ' ¥' + candidate.amount + ' ' + candidate.datetime + hint + blocked + (picked ? ' 選択中' : '');
+      btn.disabled = !candidate.selectable;
+      btn.setAttribute('aria-pressed', picked ? 'true' : 'false');
+      btn.addEventListener('click', function () {
+        state.cardSelection = { rowIndex: candidate.rowIndex, id: candidate.id, explicit: true };
+        refresh();
+      });
+      list.appendChild(btn);
+    });
+  }
+
+  function refresh() {
+    var evaluation = currentEvaluation();
+    var list = document.getElementById('issues');
+    list.replaceChildren();
+    if (!evaluation) return;
+    state.pendingPost = evaluation.post;
+    evaluation.errors.forEach(function (error) { list.appendChild(el('li', error.message)); });
+    evaluation.infos.forEach(function (info) {
+      var item = el('li', info.message);
+      item.className = 'info';
+      list.appendChild(item);
+    });
+    renderCardList(evaluation);
+    document.getElementById('saveDemo').disabled = !evaluation.ok;
+  }
+
+  function control(labelText, node) {
+    var label = el('label', labelText);
+    label.appendChild(node);
+    return label;
+  }
+
+  function renderForm() {
+    var form = document.getElementById('form');
+    form.replaceChildren();
+    var review = state.review;
+    var date = el('input');
+    date.type = 'date';
+    date.value = review.purchaseDate || '';
+    date.addEventListener('input', function () { review.purchaseDate = date.value || null; refresh(); });
+    form.appendChild(control('購入日（レシートの日付）', date));
+
+    var pay = el('select');
+    [['', '未選択'], ['現金', '現金'], ['カード', 'カード']].forEach(function (pair) {
+      var option = el('option', pair[1]);
+      option.value = pair[0];
+      pay.appendChild(option);
+    });
+    pay.value = review.paymentMethod || '';
+    pay.addEventListener('change', function () {
+      review.paymentMethod = pay.value || null;
+      if (review.paymentMethod !== 'カード') state.cardSelection = null;
+      refresh();
+    });
+    form.appendChild(control('支払方法', pay));
+
+    var taxMode = el('select');
+    [['', '未選択'], ['exclusive', '外税（消費税を1回だけ加算）'], ['inclusive', '内税（消費税は足さない）']].forEach(function (pair) {
+      var option = el('option', pair[1]);
+      option.value = pair[0];
+      taxMode.appendChild(option);
+    });
+    taxMode.value = review.taxMode || '';
+    taxMode.addEventListener('change', function () { review.taxMode = taxMode.value || null; refresh(); });
+    form.appendChild(control('税の扱い', taxMode));
+
+    function yenField(labelText, key) {
+      var input = el('input');
+      input.type = 'number';
+      input.inputMode = 'numeric';
+      input.value = review[key] == null ? '' : String(review[key]);
+      input.addEventListener('input', function () {
+        review[key] = input.value.trim() === '' ? null : Number(input.value);
+        refresh();
+      });
+      form.appendChild(control(labelText, input));
+    }
+    yenField('小計', 'subtotalYen');
+    yenField('値引（なければ0）', 'discountYen');
+    yenField('消費税', 'taxYen');
+    yenField('合計', 'totalYen');
+
+    review.items.forEach(function (item, index) {
+      var box = el('div');
+      box.className = 'item';
+      box.appendChild(el('strong', '品目 ' + (index + 1)));
+      var name = el('input');
+      name.value = item.name || '';
+      name.addEventListener('input', function () { item.name = name.value; refresh(); });
+      box.appendChild(control('品目名', name));
+      var amount = el('input');
+      amount.type = 'number';
+      amount.inputMode = 'numeric';
+      amount.value = item.amountYen == null ? '' : String(item.amountYen);
+      amount.addEventListener('input', function () {
+        item.amountYen = amount.value.trim() === '' ? null : Number(amount.value);
+        refresh();
+      });
+      box.appendChild(control('金額', amount));
+      var facs = el('div');
+      facs.className = 'facs';
+      ['山手', '新神野'].forEach(function (facility) {
+        var btn = el('button', facility);
+        btn.type = 'button';
+        btn.setAttribute('aria-pressed', item.facility === facility ? 'true' : 'false');
+        btn.addEventListener('click', function () { item.facility = facility; renderForm(); });
+        facs.appendChild(btn);
+      });
+      if (!item.facility) facs.appendChild(el('span', '未選択'));
+      box.appendChild(facs);
+      var category = el('select');
+      ['', '食費', '日用品費', '備品', '郵送費', 'その他'].forEach(function (value) {
+        var option = el('option', value || '未選択');
+        option.value = value;
+        category.appendChild(option);
+      });
+      category.value = item.category || '';
+      category.addEventListener('change', function () { item.category = category.value || null; refresh(); });
+      box.appendChild(control('分類', category));
+      form.appendChild(box);
+    });
+    refresh();
+  }
+
+  async function loadSample(key) {
+    var sample = samples[key];
+    var hash = await ReceiptImport.sha256Hex(sample.bytes);
+    var doc = JSON.parse(JSON.stringify(sample.doc));
+    doc.photo.sha256 = hash;
+    doc.photo.byteLength = sample.bytes.byteLength;
+    var parsed = ReceiptImport.parseImportJson(JSON.stringify(doc));
+    if (!parsed.ok) {
+      setStatus(parsed.errors.map(function (error) { return error.message; }).join(' '));
+      return;
+    }
+    state.document = parsed.document;
+    state.review = ReceiptImport.initialReview(parsed.document);
+    state.verifiedSha256 = hash;
+    state.verifiedByteLength = sample.bytes.byteLength;
+    state.cardSelection = null;
+    state.pendingPost = null;
+    document.getElementById('review').hidden = false;
+    document.getElementById('sampleNote').textContent = sample.note;
+    document.getElementById('identity').textContent = '写真ID ' + hash;
+    var preview = document.getElementById('preview');
+    if (key === 'card' || key === 'inclusive') {
+      preview.hidden = true;
+      preview.removeAttribute('src');
+    } else {
+      preview.src = 'data:image/png;base64,' + PNG;
+      preview.hidden = false;
+    }
+    renderForm();
+    setStatus('サンプルを開きました。まだ模擬台帳には書いていません。');
+  }
+
+  function remember(post) {
+    state.savedPost = post ? JSON.parse(JSON.stringify(post)) : null;
+  }
+
+  document.getElementById('saveDemo').addEventListener('click', function () {
+    var evaluation = currentEvaluation();
+    if (!evaluation || !evaluation.ok || !evaluation.post) return;
+    var response = ledger.apply(evaluation.post);
+    var interpreted = ReceiptImport.interpretSaveResponse(response, {
+      action: evaluation.post.action,
+      receiptId: evaluation.post.receiptId,
+      purchaseDate: evaluation.post.purchaseDate
+    });
+    if (!interpreted.ok) {
+      setStatus('模擬台帳は変更しませんでした。' + (response.message || '') + ' Googleスプレッドシートには送っていません。');
+      renderLedger();
+      return;
+    }
+    remember(evaluation.post);
+    setStatus(interpreted.duplicate
+      ? '模擬台帳: 同じ写真IDはすでにあります。行は増えていません。Googleスプレッドシートには送っていません。'
+      : '模擬台帳に反映しました。Googleスプレッドシートには送っていません。購入日はレシートの日付のままです。');
+    renderLedger();
+    refresh();
+  });
+
+  document.getElementById('resendDemo').addEventListener('click', function () {
+    if (!state.savedPost) {
+      setStatus('先に一度、模擬台帳へ保存してください。');
+      return;
+    }
+    var response = ledger.apply(state.savedPost);
+    var interpreted = ReceiptImport.interpretSaveResponse(response, {
+      action: state.savedPost.action,
+      receiptId: state.savedPost.receiptId,
+      purchaseDate: state.savedPost.purchaseDate
+    });
+    setStatus(interpreted.ok && interpreted.duplicate
+      ? '再送しました。同じ写真IDなので行は増えていません。Googleスプレッドシートには送っていません。'
+      : '再送の結果を模擬台帳に反映しました。Googleスプレッドシートには送っていません。');
+    renderLedger();
+  });
+
+  document.getElementById('partialDemo').addEventListener('click', function () {
+    if (!state.savedPost) {
+      setStatus('先に一度、模擬台帳へ保存してください。');
+      return;
+    }
+    ledger.dropLastPhotoLine(state.savedPost.receiptId);
+    var response = ledger.apply(state.savedPost);
+    setStatus(response.status === 'success'
+      ? '欠けていた ' + response.added + ' 行だけ模擬台帳に足しました。購入日はレシートの日付のままです。Googleスプレッドシートには送っていません。'
+      : '再送できませんでした。' + (response.message || ''));
+    renderLedger();
+  });
+
+  document.getElementById('shiftDemo').addEventListener('click', function () {
+    if (!state.pendingPost || state.pendingPost.action !== 'photoReceiptCardBreakdown') {
+      setStatus('先にカードサンプルで自動取込行を選んでください。保存はまだ押しません。');
+      return;
+    }
+    var stale = JSON.parse(JSON.stringify(state.pendingPost));
+    ledger.shift();
+    var response = ledger.apply(stale);
+    setStatus(response.status === 'error'
+      ? response.message + ' Googleスプレッドシートには送っていません。'
+      : '予期せず保存されました。');
+    renderLedger();
+    refresh();
+  });
+
+  document.getElementById('resetDemo').addEventListener('click', function () {
+    ledger.reset();
+    state.document = null;
+    state.review = null;
+    state.cardSelection = null;
+    state.pendingPost = null;
+    state.savedPost = null;
+    state.verifiedSha256 = '';
+    state.verifiedByteLength = null;
+    document.getElementById('review').hidden = true;
+    document.getElementById('form').replaceChildren();
+    document.getElementById('issues').replaceChildren();
+    document.getElementById('saveDemo').disabled = true;
+    setStatus('模擬台帳を初期の合成行に戻しました。');
+    renderLedger();
+  });
+
+  document.getElementById('loadUnresolved').addEventListener('click', function () { loadSample('unresolved'); });
+  document.getElementById('loadCash').addEventListener('click', function () { loadSample('cash'); });
+  document.getElementById('loadInclusive').addEventListener('click', function () { loadSample('inclusive'); });
+  document.getElementById('loadCard').addEventListener('click', function () { loadSample('card'); });
+  renderLedger();
+})();
+</script>
+</body>
+</html>

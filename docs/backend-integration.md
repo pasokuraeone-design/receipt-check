@@ -1,5 +1,7 @@
 # Backend integration
 
+Try the operator demo in `demo/receipt-photo-demo.html` first. It never calls Google. The next real check is a new spreadsheet and `gas/synthetic-harness/`, not a paste into the live script. See `gas/synthetic-harness/README.md`. That isolated test is still something a person has to run. It is not done in this repository.
+
 The page can review a photo reading offline. It will not save that reading until a live `doGet` returns the capability object below, and the save response echoes the new action. This repository does not contain the live Apps Script. Nothing here was deployed, and the production web app was not called.
 
 Manual receipt save still posts `confirmReceipt`. Card facility, ignore, and the existing breakdown buttons are unchanged. Photo save never calls those actions.

@@ -2,7 +2,8 @@
   "name": "receipt-check",
   "private": true,
   "scripts": {
-    "test": "node --test test/receiptImport.test.mjs test/ui-photo-import.mjs"
+    "test": "node --test test/receiptImport.test.mjs test/mockLedger.test.mjs test/syntheticHarness.test.mjs test/ui-photo-import.mjs test/demo-page.test.mjs",
+    "build:demo": "node scripts/build-demo.mjs"
   },
   "devDependencies": {
     "puppeteer-core": "^24.15.0"
