@@ -475,6 +475,59 @@
   .history-item .fac-dot.shinkano { background: var(--shinkano); }
   .history-item .amt-r { font-family: "Courier New", monospace; font-weight: 700; }
   .empty-hist { text-align: center; color: #9a9282; font-size: 12px; padding: 10px; }
+
+  .photo-box { font-size: 12px; line-height: 1.5; }
+  .photo-box p { margin: 8px 0; }
+  .photo-box label { display: block; margin: 8px 0; font-size: 11px; color: var(--ink-faint); }
+  .photo-box input[type="text"],
+  .photo-box input[type="number"],
+  .photo-box input[type="date"],
+  .photo-box input[type="time"],
+  .photo-box select {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink);
+    font: inherit;
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+  .cap-banner, .photo-status {
+    background: var(--paper-dark);
+    border-radius: 6px;
+    padding: 8px;
+    margin: 8px 0;
+  }
+  .photo-issues { margin: 8px 0; padding-left: 18px; color: var(--stamp-red); }
+  .photo-issues li.info { color: var(--ink-faint); }
+  #photoPreview { max-width: 100%; max-height: 180px; display: block; margin: 8px auto; }
+  #photoIdentity { word-break: break-all; font-family: "Courier New", monospace; font-size: 11px; }
+  .photo-card-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin: 6px 0;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1.5px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    font-size: 12px;
+  }
+  .photo-card-btn.picked { border-color: var(--yamate); background: rgba(62,98,89,0.08); }
+  .fac-btn.unset { border-style: dashed; color: var(--stamp-red); }
 </style>
 </head>
 <body>
@@ -494,6 +547,56 @@
       <div class="chip-row" id="paymentToggle" style="display:flex; gap:6px;">
         <button type="button" class="fac-btn" data-pay="現金" style="padding:6px 12px; border-radius:6px; border:1.5px solid var(--line); background:transparent; color:var(--ink-faint); font-size:12px;">現金</button>
         <button type="button" class="fac-btn" data-pay="カード" style="padding:6px 12px; border-radius:6px; border:1.5px solid var(--yamate); background:var(--yamate); color:#fff; font-size:12px; font-weight:700;">カード</button>
+      </div>
+    </div>
+
+    <div class="photo-box" id="photoImportWrap">
+      <div class="dashed"></div>
+      <div style="font-weight:700; text-align:center;">写真の読み取り結果</div>
+      <p>チャットで読んだJSONを選び、同じ写真でハッシュを照合します。写真はサーバへ送りません。未確認の項目があるあいだは保存しません。</p>
+      <p><a href="docs/operator-ja.md">確認手順</a> · <a href="examples/receipt-photo-import.example.json">記入例（合成データ）</a></p>
+      <div class="cap-banner" id="photoCapability">サーバの対応を確認しています…</div>
+      <button class="add-item" id="photoJsonButton" type="button">読み取り結果のJSONを選ぶ</button>
+      <input class="visually-hidden" id="photoImportFile" type="file" accept="application/json,.json">
+      <button class="add-item" id="photoFileButton" type="button">同じ写真ファイルを選ぶ（この端末内で照合）</button>
+      <input class="visually-hidden" id="photoFile" type="file" accept="image/*,application/pdf,.jpg,.jpeg,.png,.webp,.heic,.pdf">
+      <div class="photo-status" id="photoImportStatus" role="status"></div>
+      <div id="photoImportReview" hidden>
+        <p id="photoExampleBanner" hidden></p>
+        <img id="photoPreview" alt="選んだレシート写真。この端末の中だけで表示します。" hidden>
+        <p id="photoIdentity"></p>
+        <p id="photoRepeatNote" hidden></p>
+        <label>購入日（レシートの日付）
+          <input type="date" id="photoPurchaseDate">
+        </label>
+        <label>時刻（分かれば）
+          <input type="time" id="photoPurchaseTime">
+        </label>
+        <label>店名
+          <input type="text" id="photoStoreName" maxlength="80" autocomplete="off">
+        </label>
+        <label>小計（品目の合計。不明なら空欄）
+          <input type="number" id="photoSubtotal" inputmode="numeric">
+        </label>
+        <label>値引（なければ0、読めなければ空欄）
+          <input type="number" id="photoDiscount" inputmode="numeric">
+        </label>
+        <label>税の扱い
+          <select id="photoTaxMode">
+            <option value="">未選択</option>
+            <option value="exclusive">外税（消費税を別枠で1回だけ加算）</option>
+            <option value="inclusive">内税（消費税は合計に足さない）</option>
+          </select>
+        </label>
+        <label id="photoInclusiveTaxLabel" hidden>内消費税（円。合計には足さない）
+          <input type="number" id="photoInclusiveTax" inputmode="numeric">
+        </label>
+        <div id="photoCardBox" hidden>
+          <p id="photoCardHelp">カード払いは自動取込の行を自分で選んで内訳にします。日付や金額が近くても自動では選びません。</p>
+          <div id="photoCardList"></div>
+        </div>
+        <ul class="photo-issues" id="photoIssues"></ul>
+        <button class="add-item" id="photoImportClear" type="button">読み込みをやめる</button>
       </div>
     </div>
 
@@ -556,6 +659,7 @@
   </div>
 </div>
 
+<script src="src/receiptImport.js"></script>
 <script>
 const GAS_URL = "https://script.google.com/macros/s/AKfycbyFwKBKSU6GfZjIOu76ofI0wpune83iMEcPmnLqqU8HdLt4fwgiG1_4YiBgzEwTyeKu/exec";
 
@@ -567,18 +671,17 @@ let mode = 'receipt';
 let breakdownSourceRowIndex = null;
 let breakdownSourceName = '';
 let receiptPaymentMethod = 'カード'; // レシート照合タブの支払方法。今はほぼカードなのでデフォルトをカードに
+let photoDraft = null;
+let lastDoGetBody = null;
+const seenPhotoHashes = new Set();
 
 document.querySelectorAll('#paymentToggle button').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('#paymentToggle button').forEach(b => {
-      b.style.background = 'transparent';
-      b.style.color = 'var(--ink-faint)';
-      b.style.fontWeight = 'normal';
-    });
-    btn.style.background = 'var(--yamate)';
-    btn.style.color = '#fff';
-    btn.style.fontWeight = '700';
-    receiptPaymentMethod = btn.dataset.pay;
+    setPaymentUI(btn.dataset.pay);
+    if (photoDraft) {
+      photoDraft.cardSelection = null;
+      recalc();
+    }
   });
 });
 
@@ -594,6 +697,7 @@ document.querySelectorAll('#modeToggle button').forEach(btn => {
     const pendingWrap = document.getElementById('pendingWrap');
     const taxRow = document.getElementById('taxRow');
     const paymentToggleWrap = document.getElementById('paymentToggleWrap');
+    const photoImportWrap = document.getElementById('photoImportWrap');
 
     if (mode === 'card') {
       pageTitle.textContent = '💳 使った物、記録して';
@@ -602,6 +706,7 @@ document.querySelectorAll('#modeToggle button').forEach(btn => {
       pendingWrap.style.display = 'none';
       taxRow.style.display = 'none'; // カード/Amazonの金額は基本税込表示のため非表示
       paymentToggleWrap.style.display = 'none'; // カードタブは常にカード払い扱い
+      photoImportWrap.style.display = 'none';
     } else {
       pageTitle.textContent = '🧾 買った物、記録して';
       totalLabel.textContent = 'レシートの金額は？';
@@ -609,7 +714,9 @@ document.querySelectorAll('#modeToggle button').forEach(btn => {
       pendingWrap.style.display = '';
       taxRow.style.display = '';
       paymentToggleWrap.style.display = 'flex';
+      photoImportWrap.style.display = '';
     }
+    if (photoDraft) clearPhotoDraft();
     renderCardReview();
 
     // モードを跨ぐと混乱するので入力中身はリセット
@@ -638,14 +745,19 @@ async function loadPending() {
   try {
     const res = await fetch(GAS_URL);
     const data = await res.json();
+    lastDoGetBody = data;
     pendingList = data.pending || [];
     cardPendingList = data.cardPending || [];
+    updateCapabilityBanner();
     statusEl.textContent = pendingList.length === 0
       ? '未精算の依頼はなし。全部リストにない物？'
       : `未精算の依頼 ${pendingList.length}件（タップで追加）`;
     renderPending();
     renderCardReview();
+    if (photoDraft) recalc();
   } catch (err) {
+    lastDoGetBody = null;
+    updateCapabilityBanner();
     statusEl.textContent = '依頼リストの取得に失敗… GAS側のアクセス権限を確認して';
     console.error(err);
   }
@@ -765,6 +877,12 @@ function renderPending() {
 
 function updateAddSelectedBtn() {
   const btn = document.getElementById('addSelectedBtn');
+  if (photoDraft) {
+    btn.textContent = '写真の確認中は依頼リストを追加できません';
+    btn.style.opacity = '0.4';
+    btn.style.pointerEvents = 'none';
+    return;
+  }
   const checked = document.querySelectorAll('#pendingList input[type="checkbox"]:checked');
   btn.textContent = `選んだ物をまとめて追加 (${checked.length})`;
   if (checked.length > 0) {
@@ -777,6 +895,7 @@ function updateAddSelectedBtn() {
 }
 
 document.getElementById('addSelectedBtn').addEventListener('click', () => {
+  if (photoDraft) return;
   const checked = document.querySelectorAll('#pendingList input[type="checkbox"]:checked');
   checked.forEach(cb => {
     const rowIndex = parseInt(cb.dataset.row);
@@ -802,46 +921,78 @@ function guessCategory(name) {
   return '備品';
 }
 
+function facilityButtonLabel(fac) {
+  if (fac === 'yamate') return '山手';
+  if (fac === 'shinkano') return '新神野';
+  return '未選択';
+}
+
 function addItemRow(name = '', amount = '', fac = 'yamate', rowIndex = null, meta = {}) {
   itemCount++;
   const row = document.createElement('div');
   row.className = 'item-row';
+  if (meta.facilityUnresolved) fac = '';
   row.dataset.fac = fac;
   if (rowIndex) row.dataset.rowIndex = rowIndex;
   if (meta.note) row.dataset.note = meta.note;
+  if (meta.photoItem) row.dataset.photoItem = '1';
+  if (meta.role) row.dataset.role = meta.role;
+  if (meta.taxRate === 8 || meta.taxRate === 10) row.dataset.taxRate = String(meta.taxRate);
+  if (meta.qty) row.dataset.qty = String(meta.qty);
 
-  const initialCategory = guessCategory(name);
+  const categories = meta.role === 'discount' ? ['値引'] : LEDGER_CATEGORIES;
+  const preserveUnknown = !!meta.preserveUnknown;
+  const initialCategory = preserveUnknown
+    ? (categories.includes(meta.category) ? meta.category : '')
+    : guessCategory(name);
   const facLocked = !!rowIndex; // 依頼リストから来た品は拠点固定（スプシの拠点に従う）
   row.innerHTML = `
     <div class="item-row-line1">
-      <button type="button" class="fac-btn ${fac}" ${facLocked ? 'disabled style="opacity:0.6;cursor:default;"' : ''}>${fac === 'yamate' ? '山手' : '新神野'}</button>
-      <input type="text" placeholder="品目 (例：卵)" value="${name}" ${rowIndex ? 'readonly style="color:var(--ink-faint);"' : ''}>
-      <div class="yen-input"><span>¥</span><input type="number" inputmode="numeric" placeholder="0" value="${amount}"></div>
+      <button type="button" class="fac-btn ${fac || 'unset'}" ${facLocked ? 'disabled style="opacity:0.6;cursor:default;"' : ''}></button>
+      <input type="text" placeholder="品目 (例：卵)">
+      <div class="yen-input"><span>¥</span><input type="number" inputmode="numeric" placeholder="0"></div>
       <button class="del" type="button">×</button>
     </div>
     <div class="item-row-line2">
       <span class="cat-label">分類：</span>
       <select class="item-category">
-        ${LEDGER_CATEGORIES.map(c => `<option value="${c}" ${c === initialCategory ? 'selected' : ''}>${c}</option>`).join('')}
+        ${preserveUnknown ? '<option value="">未選択</option>' : ''}
+        ${categories.map(c => `<option value="${c}" ${c === initialCategory ? 'selected' : ''}>${c}</option>`).join('')}
       </select>
     </div>
   `;
   const facBtn = row.querySelector('.fac-btn');
   const nameInput = row.querySelector('input[type="text"]');
   const amtInput = row.querySelector('input[type="number"]');
+  const categorySelect = row.querySelector('.item-category');
   const delBtn = row.querySelector('.del');
+  facBtn.textContent = facilityButtonLabel(fac);
+  nameInput.value = name || '';
+  if (amount === '' || amount === null || amount === undefined) amtInput.value = '';
+  else amtInput.value = String(amount);
+  if (rowIndex || meta.lockName) {
+    nameInput.readOnly = true;
+    nameInput.style.color = 'var(--ink-faint)';
+  }
+  if (meta.lockAmount) amtInput.readOnly = true;
+  if (meta.role === 'discount') categorySelect.disabled = true;
 
   if (!facLocked) {
     facBtn.addEventListener('click', () => {
-      const next = row.dataset.fac === 'yamate' ? 'shinkano' : 'yamate';
+      const next = row.dataset.photoItem === '1' && !row.dataset.fac
+        ? 'yamate'
+        : (row.dataset.fac === 'yamate' ? 'shinkano' : 'yamate');
       row.dataset.fac = next;
-      facBtn.textContent = next === 'yamate' ? '山手' : '新神野';
-      facBtn.classList.remove('yamate', 'shinkano');
+      facBtn.textContent = facilityButtonLabel(next);
+      facBtn.classList.remove('yamate', 'shinkano', 'unset');
       facBtn.classList.add(next);
+      recalc();
     });
   }
 
   amtInput.addEventListener('input', recalc);
+  nameInput.addEventListener('input', () => { if (photoDraft) recalc(); });
+  categorySelect.addEventListener('change', () => { if (photoDraft) recalc(); });
   delBtn.addEventListener('click', () => {
     row.remove();
     if (rowIndex) renderPending();
@@ -849,12 +1000,15 @@ function addItemRow(name = '', amount = '', fac = 'yamate', rowIndex = null, met
   });
 
   itemsEl.appendChild(row);
-  recalc();
-  if (!rowIndex) nameInput.focus();
-  else amtInput.focus();
+  if (!meta.skipRecalc) recalc();
+  if (!meta.skipFocus) {
+    if (!rowIndex) nameInput.focus();
+    else amtInput.focus();
+  }
 }
 
 function recalc() {
+  if (photoDraft) syncDiscountRow();
   let sum = 0;
   document.querySelectorAll('.item-row input[type="number"]').forEach(inp => {
     sum += parseFloat(inp.value) || 0;
@@ -886,14 +1040,25 @@ function recalc() {
   } else {
     diffRowEl.textContent = '';
   }
+  if (photoDraft) applyPhotoGate();
 }
 
 receiptTotalEl.addEventListener('input', recalc);
 document.getElementById('taxInput').addEventListener('input', recalc);
-document.getElementById('addItem').addEventListener('click', () => addItemRow());
+document.getElementById('addItem').addEventListener('click', () => {
+  if (photoDraft) {
+    addItemRow('', '', '', null, { preserveUnknown: true, facilityUnresolved: true, photoItem: true, skipFocus: false });
+  } else {
+    addItemRow();
+  }
+});
 
 saveBtn.addEventListener('click', async () => {
   if (!saveBtn.classList.contains('enabled')) return;
+  if (photoDraft) {
+    await savePhotoDraft();
+    return;
+  }
   saveBtn.textContent = '送信中…';
   saveBtn.classList.remove('enabled');
 
@@ -1002,7 +1167,9 @@ function renderHistory() {
     return;
   }
   historyEl.innerHTML = savedRecords.map(r => {
-    const dateStr = r.date.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) +
+    const dateStr = r.purchaseDate
+      ? `${r.purchaseDate.replace(/-/g, '/')} 購入`
+      : r.date.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) +
                     ' ' + r.date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
     const isYamate = f => f === '山手' || f === 'yamate';
     const isShinkano = f => f === '新神野' || f === 'shinkano';
@@ -1024,6 +1191,448 @@ document.getElementById('historyToggle').addEventListener('click', () => {
     historyEl.classList.contains('show') ? '過去の記録を見る ▴' : '過去の記録を見る ▾';
 });
 
+function setPaymentUI(method) {
+  receiptPaymentMethod = method || null;
+  document.querySelectorAll('#paymentToggle button').forEach(btn => {
+    const on = !!method && btn.dataset.pay === method;
+    btn.style.background = on ? 'var(--yamate)' : 'transparent';
+    btn.style.color = on ? '#fff' : 'var(--ink-faint)';
+    btn.style.fontWeight = on ? '700' : 'normal';
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+
+function updateCapabilityBanner() {
+  const el = document.getElementById('photoCapability');
+  if (!el) return;
+  const caps = window.ReceiptImport ? ReceiptImport.confirmCapabilities(lastDoGetBody) : { ok: false };
+  el.textContent = caps.ok
+    ? 'サーバの応答に、購入日の保存と写真IDの再送防止の印があります。成功の応答を確認できるまで、保存できたとは扱いません。'
+    : 'サーバが購入日の保存と写真IDの再送防止に対応していることを確認できません。確認できるまで、この読み取り結果は保存できません。従来の保存処理には切り替えません。';
+}
+
+function readYenInput(input) {
+  if (!input) return null;
+  const raw = input.value.trim();
+  if (raw === '') return null;
+  return Number(raw);
+}
+
+function facilityFromCode(fac) {
+  if (fac === 'yamate') return '山手';
+  if (fac === 'shinkano') return '新神野';
+  return null;
+}
+
+function showPhotoStatus(messages) {
+  const el = document.getElementById('photoImportStatus');
+  el.replaceChildren();
+  messages.forEach(text => {
+    const p = document.createElement('p');
+    p.textContent = text;
+    el.appendChild(p);
+  });
+}
+
+function collectPhotoReview() {
+  const taxMode = document.getElementById('photoTaxMode').value || null;
+  let purchaseTime = document.getElementById('photoPurchaseTime').value || null;
+  if (purchaseTime && /^\d{2}:\d{2}:\d{2}$/.test(purchaseTime)) purchaseTime = purchaseTime.slice(0, 5);
+  const review = {
+    purchaseDate: document.getElementById('photoPurchaseDate').value || null,
+    purchaseTime,
+    storeName: document.getElementById('photoStoreName').value.trim() || null,
+    paymentMethod: receiptPaymentMethod,
+    taxMode,
+    subtotalYen: readYenInput(document.getElementById('photoSubtotal')),
+    discountYen: readYenInput(document.getElementById('photoDiscount')),
+    discountFacility: null,
+    taxYen: null,
+    addedTaxYen: readYenInput(document.getElementById('taxInput')),
+    totalYen: readYenInput(receiptTotalEl),
+    items: [],
+    cardSelection: photoDraft && photoDraft.cardSelection
+  };
+  review.taxYen = taxMode === 'inclusive'
+    ? readYenInput(document.getElementById('photoInclusiveTax'))
+    : review.addedTaxYen;
+  document.querySelectorAll('.item-row').forEach(row => {
+    if (row.dataset.role === 'discount') {
+      review.discountFacility = facilityFromCode(row.dataset.fac);
+      return;
+    }
+    const amountRaw = row.querySelector('input[type="number"]').value.trim();
+    review.items.push({
+      name: row.querySelector('input[type="text"]').value,
+      amountYen: amountRaw === '' ? null : Number(amountRaw),
+      qty: row.dataset.qty ? Number(row.dataset.qty) : null,
+      category: row.querySelector('.item-category').value || null,
+      facility: facilityFromCode(row.dataset.fac),
+      taxRate: row.dataset.taxRate ? Number(row.dataset.taxRate) : null
+    });
+  });
+  return review;
+}
+
+function currentPhotoEvaluation() {
+  if (!photoDraft || !window.ReceiptImport) return null;
+  return ReceiptImport.evaluateReviewed(photoDraft.document, collectPhotoReview(), {
+    capabilitiesBody: lastDoGetBody,
+    cardPending: cardPendingList,
+    verifiedPhotoSha256: photoDraft.verifiedSha256 || '',
+    verifiedPhotoByteLength: photoDraft.verifiedByteLength
+  });
+}
+
+function syncDiscountRow() {
+  if (!photoDraft) return;
+  const raw = document.getElementById('photoDiscount').value.trim();
+  const existing = document.querySelectorAll('.item-row[data-role="discount"]');
+  existing.forEach((row, index) => { if (index > 0) row.remove(); });
+  const row = existing[0] && existing[0].isConnected ? existing[0] : null;
+  if (raw === '' || raw === '0') {
+    if (row) row.remove();
+    return;
+  }
+  const amount = Number(raw);
+  if (!Number.isInteger(amount) || amount <= 0) return;
+  if (!row) {
+    addItemRow('値引', -amount, '', null, {
+      preserveUnknown: true,
+      facilityUnresolved: true,
+      photoItem: true,
+      role: 'discount',
+      category: '値引',
+      skipRecalc: true,
+      skipFocus: true,
+      lockAmount: true,
+      lockName: true
+    });
+    return;
+  }
+  row.querySelector('input[type="number"]').value = String(-amount);
+}
+
+function renderPhotoMessages(evaluation) {
+  const list = document.getElementById('photoIssues');
+  list.replaceChildren();
+  if (!evaluation) return;
+  evaluation.errors.forEach(error => {
+    const li = document.createElement('li');
+    li.textContent = error.message;
+    list.appendChild(li);
+  });
+  evaluation.infos.forEach(info => {
+    const li = document.createElement('li');
+    li.className = 'info';
+    li.textContent = info.message;
+    list.appendChild(li);
+  });
+}
+
+function renderPhotoCardList(evaluation) {
+  const box = document.getElementById('photoCardBox');
+  const list = document.getElementById('photoCardList');
+  if (!photoDraft || receiptPaymentMethod !== 'カード') {
+    box.hidden = true;
+    list.replaceChildren();
+    return;
+  }
+  box.hidden = false;
+  list.replaceChildren();
+  const candidates = evaluation && evaluation.card ? evaluation.card.candidates : [];
+  if (!candidates.length) {
+    const p = document.createElement('p');
+    p.textContent = '自動取込のカード行がありません。この画面から新しいカード支出は追加しません。';
+    list.appendChild(p);
+    return;
+  }
+  candidates.forEach(candidate => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'photo-card-btn';
+    const picked = photoDraft.cardSelection && photoDraft.cardSelection.id === candidate.id;
+    if (picked) btn.classList.add('picked');
+    const hint = candidate.similarAmount || candidate.similarDate ? ' 日付や金額が近いです。同じレシートとは判断しません。' : '';
+    const state = picked ? ' 選択中' : '';
+    const blocked = candidate.selectable ? '' : ' IDを確認できないので選べません。';
+    btn.textContent = `${candidate.name} ¥${candidate.amount == null ? '?' : candidate.amount}${hint}${blocked}${state}`;
+    btn.disabled = !candidate.selectable;
+    btn.addEventListener('click', () => {
+      photoDraft.cardSelection = { rowIndex: candidate.rowIndex, id: candidate.id, explicit: true };
+      recalc();
+    });
+    list.appendChild(btn);
+  });
+}
+
+function applyPhotoGate() {
+  const evaluation = currentPhotoEvaluation();
+  renderPhotoMessages(evaluation);
+  renderPhotoCardList(evaluation);
+  const hashStatus = document.getElementById('photoImportStatus');
+  if (photoDraft && photoDraft.verifiedSha256 && evaluation && !evaluation.errors.some(error => error.code === 'photo-hash-mismatch' || error.code === 'photo-size-mismatch')) {
+    hashStatus.textContent = '写真のハッシュは一致しました。写真はサーバへ送っていません。';
+  }
+  if (evaluation && evaluation.ok) {
+    diffRowEl.textContent = '確認できました。保存できます。';
+    diffRowEl.classList.remove('over', 'under');
+    saveBtn.classList.add('enabled');
+    void stampEl.offsetWidth;
+    stampEl.classList.add('show');
+    return;
+  }
+  saveBtn.classList.remove('enabled');
+  stampEl.classList.remove('show');
+  if (evaluation && evaluation.errors[0]) diffRowEl.textContent = evaluation.errors[0].message;
+}
+
+function applyPhotoPrefill(doc) {
+  const review = ReceiptImport.initialReview(doc);
+  const repeat = seenPhotoHashes.has(doc.photo.sha256);
+  seenPhotoHashes.add(doc.photo.sha256);
+  photoDraft = {
+    document: doc,
+    verifiedSha256: '',
+    verifiedByteLength: null,
+    previewUrl: '',
+    cardSelection: null,
+    repeatInPage: repeat
+  };
+  receiptTotalEl.value = review.totalYen == null ? '' : String(review.totalYen);
+  document.getElementById('photoPurchaseDate').value = review.purchaseDate || '';
+  document.getElementById('photoPurchaseTime').value = review.purchaseTime || '';
+  document.getElementById('photoStoreName').value = review.storeName || '';
+  document.getElementById('photoSubtotal').value = review.subtotalYen == null ? '' : String(review.subtotalYen);
+  document.getElementById('photoDiscount').value = review.discountYen == null ? '' : String(review.discountYen);
+  document.getElementById('photoTaxMode').value = review.taxMode || '';
+  const taxInput = document.getElementById('taxInput');
+  const inclusive = document.getElementById('photoInclusiveTax');
+  const inclusiveLabel = document.getElementById('photoInclusiveTaxLabel');
+  if (review.taxMode === 'exclusive') {
+    taxInput.value = review.taxYen == null ? '' : String(review.taxYen);
+    taxInput.dataset.forcedZero = '';
+    inclusive.value = '';
+    inclusiveLabel.hidden = true;
+  } else if (review.taxMode === 'inclusive') {
+    inclusive.value = review.taxYen == null ? '' : String(review.taxYen);
+    inclusiveLabel.hidden = false;
+    taxInput.value = '0';
+    taxInput.dataset.forcedZero = '1';
+  } else {
+    taxInput.value = '';
+    taxInput.dataset.forcedZero = '';
+    inclusive.value = '';
+    inclusiveLabel.hidden = true;
+  }
+  setPaymentUI(review.paymentMethod);
+  itemsEl.innerHTML = '';
+  review.items.forEach(item => {
+    const fac = item.facility === '山手' ? 'yamate' : item.facility === '新神野' ? 'shinkano' : '';
+    addItemRow(item.name || '', item.amountYen == null ? '' : item.amountYen, fac, null, {
+      preserveUnknown: true,
+      facilityUnresolved: !item.facility,
+      photoItem: true,
+      category: item.category || '',
+      taxRate: item.taxRate,
+      qty: item.qty,
+      skipRecalc: true,
+      skipFocus: true
+    });
+  });
+  const banner = document.getElementById('photoExampleBanner');
+  if (doc.example) {
+    banner.hidden = false;
+    banner.textContent = doc.exampleNotice || 'これは合成の記入例です。保存できません。';
+  } else {
+    banner.hidden = true;
+    banner.textContent = '';
+  }
+  document.getElementById('photoIdentity').textContent = `写真ID ${doc.photo.sha256} / ${doc.photo.byteLength} bytes`;
+  const repeatNote = document.getElementById('photoRepeatNote');
+  repeatNote.hidden = !repeat;
+  repeatNote.textContent = repeat
+    ? 'この画面では同じ写真IDをすでに開いています。これはブラウザ内の注意であり、サーバの再送防止ではありません。'
+    : '';
+  document.getElementById('photoPreview').hidden = true;
+  document.getElementById('photoImportReview').hidden = false;
+  showPhotoStatus(['読み込みました。まだ保存していません。同じ写真ファイルを選んでハッシュを照合してください。']);
+  recalc();
+  updateAddSelectedBtn();
+}
+
+function clearPhotoDraft() {
+  if (photoDraft && photoDraft.previewUrl) URL.revokeObjectURL(photoDraft.previewUrl);
+  photoDraft = null;
+  const review = document.getElementById('photoImportReview');
+  if (review) review.hidden = true;
+  const preview = document.getElementById('photoPreview');
+  if (preview) {
+    preview.hidden = true;
+    preview.removeAttribute('src');
+  }
+  showPhotoStatus([]);
+  if (typeof itemsEl !== 'undefined' && itemsEl) itemsEl.innerHTML = '';
+  if (typeof receiptTotalEl !== 'undefined' && receiptTotalEl) receiptTotalEl.value = '';
+  const taxInput = document.getElementById('taxInput');
+  if (taxInput) {
+    taxInput.value = '';
+    taxInput.dataset.forcedZero = '';
+  }
+  ['photoPurchaseDate', 'photoPurchaseTime', 'photoStoreName', 'photoSubtotal', 'photoDiscount', 'photoInclusiveTax'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+  const taxMode = document.getElementById('photoTaxMode');
+  if (taxMode) taxMode.value = '';
+  const jsonInput = document.getElementById('photoImportFile');
+  const photoInput = document.getElementById('photoFile');
+  if (jsonInput) jsonInput.value = '';
+  if (photoInput) photoInput.value = '';
+  setPaymentUI('カード');
+  if (typeof recalc === 'function') recalc();
+  if (typeof updateAddSelectedBtn === 'function') updateAddSelectedBtn();
+}
+
+function applyTaxModeUI(userSwitch) {
+  const mode = document.getElementById('photoTaxMode').value;
+  const taxInput = document.getElementById('taxInput');
+  document.getElementById('photoInclusiveTaxLabel').hidden = mode !== 'inclusive';
+  if (mode === 'inclusive') {
+    taxInput.value = '0';
+    taxInput.dataset.forcedZero = '1';
+  } else if (userSwitch && taxInput.dataset.forcedZero === '1') {
+    taxInput.value = '';
+    taxInput.dataset.forcedZero = '';
+  }
+}
+
+async function importPhotoJson(file) {
+  if (!window.ReceiptImport) {
+    showPhotoStatus(['読み込み機能を読み込めませんでした。']);
+    return;
+  }
+  if (breakdownSourceRowIndex) {
+    showPhotoStatus(['カード内訳の入力中です。やめてから読み取り結果を開いてください。']);
+    return;
+  }
+  if (mode !== 'receipt') {
+    showPhotoStatus(['レシート照合の画面で読み込んでください。']);
+    return;
+  }
+  if (file.size > ReceiptImport.MAX_JSON_BYTES) {
+    showPhotoStatus(['JSONが大きすぎます。写真そのものは入れないでください。']);
+    return;
+  }
+  const parsed = ReceiptImport.parseImportJson(await file.text());
+  if (!parsed.ok) {
+    showPhotoStatus(parsed.errors.map(error => error.message));
+    return;
+  }
+  applyPhotoPrefill(parsed.document);
+}
+
+async function verifyPhotoFile(file) {
+  if (!photoDraft || !window.ReceiptImport) {
+    showPhotoStatus(['先に読み取り結果のJSONを選んでください。']);
+    return;
+  }
+  if (file.size > 20000000) {
+    showPhotoStatus(['写真が大きすぎます。']);
+    return;
+  }
+  const hash = await ReceiptImport.sha256Hex(await file.arrayBuffer());
+  photoDraft.verifiedSha256 = hash;
+  photoDraft.verifiedByteLength = file.size;
+  const img = document.getElementById('photoPreview');
+  if (photoDraft.previewUrl) URL.revokeObjectURL(photoDraft.previewUrl);
+  if (file.type.startsWith('image/')) {
+    photoDraft.previewUrl = URL.createObjectURL(file);
+    img.src = photoDraft.previewUrl;
+    img.hidden = false;
+  } else {
+    photoDraft.previewUrl = '';
+    img.hidden = true;
+    img.removeAttribute('src');
+  }
+  recalc();
+}
+
+async function savePhotoDraft() {
+  const evaluation = currentPhotoEvaluation();
+  if (!evaluation || !evaluation.ok || !evaluation.post) {
+    recalc();
+    return;
+  }
+  const expected = {
+    action: evaluation.post.action,
+    receiptId: evaluation.post.receiptId,
+    purchaseDate: evaluation.post.purchaseDate
+  };
+  saveBtn.textContent = '送信中…';
+  saveBtn.classList.remove('enabled');
+  let interpreted;
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(evaluation.post)
+    });
+    let data = null;
+    try { data = JSON.parse(await res.text()); } catch (parseErr) { data = null; }
+    if (!res.ok) data = null;
+    interpreted = ReceiptImport.interpretSaveResponse(data, expected);
+  } catch (err) {
+    interpreted = { ok: false, clearForm: false, message: '保存の応答を確認できませんでした。画面の内容は残します。' };
+  }
+  if (!interpreted.ok || !interpreted.clearForm) {
+    alert(interpreted.message);
+    saveBtn.textContent = 'この内容で保存する';
+    recalc();
+    return;
+  }
+  savedRecords.unshift({
+    total: evaluation.post.totalYen,
+    items: evaluation.lines.map(line => ({ name: line.name, amount: line.amount, facility: line.facility })),
+    date: new Date(),
+    purchaseDate: evaluation.post.purchaseDate
+  });
+  renderHistory();
+  historyEl.classList.add('show');
+  document.getElementById('historyToggle').textContent = '過去の記録を見る ▴';
+  alert(interpreted.message);
+  clearPhotoDraft();
+  saveBtn.textContent = 'この内容で保存する';
+  await loadPending();
+}
+// END savePhotoDraft
+
+function bindPhotoImport() {
+  const fields = ['photoPurchaseDate', 'photoPurchaseTime', 'photoStoreName', 'photoSubtotal', 'photoDiscount', 'photoInclusiveTax'];
+  fields.forEach(id => {
+    document.getElementById(id).addEventListener('input', () => { if (photoDraft) recalc(); });
+  });
+  document.getElementById('photoTaxMode').addEventListener('change', () => {
+    if (!photoDraft) return;
+    applyTaxModeUI(true);
+    recalc();
+  });
+  document.getElementById('photoImportFile').addEventListener('change', async (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (file) await importPhotoJson(file);
+  });
+  document.getElementById('photoFile').addEventListener('change', async (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (file) await verifyPhotoFile(file);
+  });
+  document.getElementById('photoImportClear').addEventListener('click', () => clearPhotoDraft());
+  document.getElementById('photoJsonButton').addEventListener('click', () => document.getElementById('photoImportFile').click());
+  document.getElementById('photoFileButton').addEventListener('click', () => document.getElementById('photoFile').click());
+}
+
+bindPhotoImport();
 loadPending();
 </script>
 </body>
